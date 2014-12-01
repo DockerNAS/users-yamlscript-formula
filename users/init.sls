@@ -90,8 +90,6 @@ $for name, values in pillar('groups', {}).items():
       if values is None:
           values = {}
       values.update(name=name)
-      print values
-
       values = self.update(values)
       group.group.name = name
 
@@ -102,6 +100,19 @@ $for name, values in pillar('groups', {}).items():
     - name:             null
     - gid:              null
 
+# Absent groups
+$for name in pillar('absent_groups', []):
+  absent_groups:
+    group.absent:
+    - __id__:           $'{0}_absent_group'.format(name)
+    - name:             $name
+
+# Absent users
+$for name in pillar('absent_users', []):
+  absent_users:
+    user.absent:
+    - __id__:           $'{0}_absent_user'.format(name)
+    - name:             $name
 
 # Main user add loop
 $for name, values in pillar('users', {}).items():
@@ -247,3 +258,4 @@ $for name, values in pillar('users', {}).items():
               - __id__:         $'{0}_user_auth_absent'.format(user.user.name)
               - user:           $user.user.name
               - absent
+
