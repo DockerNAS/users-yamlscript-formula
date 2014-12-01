@@ -4,23 +4,8 @@
 # Note that any values set in pillar WILL over ride any defaults set here with the
 # exception of values set by python code
 #
-# TODO:  Sort out the actual process cause it changed!
 # Process: salt defaults  <-- defaults (this file)  <-- pillar  <-- generated code
-# Process: salt defaults  <-- defaults (this file)  <-- generated code  <-- pillar
 #
-# Need to identify this pillar somehow so we user users_auto.
-# In future we will just include complete file so we don't need to have this
-
-# Location of pillar file; defaults to same name as state file , so don't
-# really need it for this use case.  If provided, it MUST be the first statement
-#
-# - Keys that do not exist will return Empty type
-# - access state values by id_name.state_name.key like user.group.name = 'dev'
-#   or user['group']['name']
-# - since the data_content is wrapped in a Content wrapper, you can access the
-#   dictionary functions like update by appending ._data like
-#   user.group._data.update(values) or copy it to a variable first like
-#   group = user.group._data; group.update(values)
 
 $comment: |
     Pillars
@@ -82,24 +67,11 @@ $comment: |
           ssh:
             save_keys: False
 
-
-#
-
 # Will set all the default values from salt; allows short pillar descriptions
 $defaults : True
 
-# Looks at the test files in the test directory.  Will help when initially
-# setting up pillar to make sure you get desired results before running
-# a highstate.  Just run `salt-call --local --out=yaml state.show_sls users`
-# and check the logs
-#$test_file:
-#  - salt://users/tests.mel
-#  - salt://users/tests.bobby
-#  - salt://users/tests.docker
-
 # Defualt user group to use if you don't add them in pillar
 $python: default_users_group = 'users'
-#$python: default_users_group = None
 
 $include: users.sudo
 
@@ -110,10 +82,26 @@ $pillars:
   enabled:
     - /etc/sudoers.d
     - sudoer_file
-#    - tester: tester_renamed
-#  aliases:
-#    - tester_renamed.file: None
-#    # <state_id>.<state_name>: <path> (None is base (root))
+
+
+# Main group add loop
+$for name, values in pillar('groups', {}).items():
+  $python: |
+      if values is None:
+          values = {}
+      values.update(name=name)
+      print values
+
+      values = self.update(values)
+      group.group.name = name
+
+  group:
+    group.present:
+    - __id__:           $'{0}_group'.format(group.group.name)
+    - __alias__:        null
+    - name:             null
+    - gid:              null
+
 
 # Main user add loop
 $for name, values in pillar('users', {}).items():
@@ -150,8 +138,6 @@ $for name, values in pillar('users', {}).items():
           user.user.gid = user.user.uid
       elif user.group.gid is not None:
           user.user.gid = user.group.gid
-      #elif user.user.gid is None and user.user.uid is not None:
-      #    user.user.gid = user.user.uid
       elif user.user.gid is None:
           user.user.gid_from_name = True
 
@@ -199,6 +185,7 @@ $for name, values in pillar('users', {}).items():
     - inactdays:        null
     - warndays:         null
     - expire:           null
+
     $if user.user.createhome and user.user.home is not None:
       file.directory:
       - __id__:           $'{0}_user'.format(user.user.name)
@@ -215,16 +202,6 @@ $for name, values in pillar('users', {}).items():
         - __id__:           $'{0}_{1}_group'.format(user.user.name, g)
         - name:             $g
 
-  # TODO:
-  # Make sure I can access variables that were set in previous python
-  # sessions both as a replacement value AND in other python code that may
-  # get called!
-  #
-  # TODO:
-  # Make this more defensive!  not guarenteed ssh values exist in pillar
-  # Maybe just keep backup vlaues in ContentWrapper of values that dont delete
-  # so if a value does not exist; then check backup before raising KeyError!
-  #if user.user.createhome and user.user.home:
   $if user.user.createhome and user.user.home and values.ssh.save_keys:
     $with File('{0}_user'.format(user.user.name), 'require'):
       $with ssh_directory:
@@ -237,12 +214,6 @@ $for name, values in pillar('users', {}).items():
         - mode:             700
         - directory
 
-        # Going to want ssh_directory above to have a with: on line above it; then when we parse
-        # the with, we know next statement is what it will belong to; so parse the next statement
-        # then execure it with 'with' in front of it?
-
-        # XXX:  Name is coming up wrong; FIX that, but then set the ID as directory
-        # not using ssh_private_key!   ... same for above etc!!!!
         ssh_private_key:
           file:
           - __id__:           $'{0}/.ssh/id_{1}'.format(user.user.home, values.ssh.key_type)
@@ -254,11 +225,9 @@ $for name, values in pillar('users', {}).items():
           - mode:             600
           - managed
 
-        # TODO TEST and remove name; will it get value from __ID__?  It should
         ssh_public_key:
           file:
           - __id__:           $'{0}/.ssh/id_{1}.pub'.format(user.user.home, values.ssh.key_type)
-          #- name:             $'{0}/.ssh/id_{1}.pub'.format(user.user.home, values.ssh.key_type)
           - user:             $user.user.name
           - group:            $user.group.name
           - contents_pillar:  $'users:{0}:ssh:keys:public'.format(user.user.name)
@@ -271,9 +240,7 @@ $for name, values in pillar('users', {}).items():
             ssh_auth.present:
               - __id__:         $'{0}_user_auth_present'.format(user.user.name)
               - user:           $user.user.name
-              #- present
 
-        # This formula is wrong... user.user.name??  more like auth_absent.ssh_auth.name
         $if auth_absent.ssh_auth.name or auth_absent.ssh_auth.names:
           auth_absent:
             ssh_auth:

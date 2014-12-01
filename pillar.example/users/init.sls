@@ -53,6 +53,10 @@
 #         uid: 400
 #
 
+groups:
+  shadow:
+    system: True
+
 users:
   mel:
     # Notice how there are no hyphens ('-') before keywords and only keywords with a list
