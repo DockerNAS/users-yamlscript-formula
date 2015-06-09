@@ -1,6 +1,5 @@
 #!yamlscript
 #
-# This is the default template.
 # Note that any values set in pillar WILL over ride any defaults set here with the
 # exception of values set by python code
 #
